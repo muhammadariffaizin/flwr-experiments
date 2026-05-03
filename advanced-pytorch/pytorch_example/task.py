@@ -103,31 +103,37 @@ def apply_eval_transforms(batch):
 fds = None  # Cache FederatedDataset
 
 
-def load_data(partition_id: int, num_partitions: int):
+def load_data(partition_id: int, num_partitions: int, config: UserConfig | None = None):
     """Load partition FashionMNIST data."""
+    config = {} if config is None else config
+    dataset_name = config.get("dataset-name", "zalando-datasets/fashion_mnist")
+    batch_size = config.get("batch-size", 32)
+    partition_alpha = config.get("partition-alpha", 1.0)
+    partition_seed = config.get("partition-seed", 42)
+
     # Only initialize `FederatedDataset` once
     global fds
     if fds is None:
         partitioner = DirichletPartitioner(
             num_partitions=num_partitions,
             partition_by="label",
-            alpha=1.0,
-            seed=42,
+            alpha=partition_alpha,
+            seed=partition_seed,
         )
         fds = FederatedDataset(
-            dataset="zalando-datasets/fashion_mnist",
+            dataset=dataset_name,
             partitioners={"train": partitioner},
         )
     partition = fds.load_partition(partition_id)
     # Divide data on each node: 80% train, 20% test
-    partition_train_test = partition.train_test_split(test_size=0.2, seed=42)
+    partition_train_test = partition.train_test_split(test_size=0.2, seed=partition_seed)
 
     train_partition = partition_train_test["train"].with_transform(
         apply_train_transforms
     )
     test_partition = partition_train_test["test"].with_transform(apply_eval_transforms)
-    trainloader = DataLoader(train_partition, batch_size=32, shuffle=True)
-    testloader = DataLoader(test_partition, batch_size=32)
+    trainloader = DataLoader(train_partition, batch_size=batch_size, shuffle=True)
+    testloader = DataLoader(test_partition, batch_size=batch_size)
     return trainloader, testloader
 
 

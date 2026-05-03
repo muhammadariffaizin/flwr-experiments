@@ -1,10 +1,12 @@
 """pytorch-example: A Flower / PyTorch app."""
 
+from importlib import import_module
+
 import torch
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 
-from pytorch_example.task import Net, load_data
+from pytorch_example.task import Net
 from pytorch_example.task import test as test_fn
 from pytorch_example.task import train as train_fn
 
@@ -28,6 +30,15 @@ def load_layer_weights_from_state(state: RecordDict, net: Net):
     net.fc2.load_state_dict(state_dict, strict=True)
 
 
+def get_data_loaders(context: Context):
+    """Load client data using the configured data-loader callback."""
+    partition_id = context.node_config["partition-id"]
+    num_partitions = context.node_config["num-partitions"]
+    module_name, function_name = context.run_config["load-data-fn"].split(":")
+    load_data_fn = getattr(import_module(module_name), function_name)
+    return load_data_fn(partition_id, num_partitions, context.run_config)
+
+
 @app.train()
 def train(msg: Message, context: Context):
     """Train the model on local data."""
@@ -42,9 +53,7 @@ def train(msg: Message, context: Context):
     model.to(device)
 
     # Load the data
-    partition_id = context.node_config["partition-id"]
-    num_partitions = context.node_config["num-partitions"]
-    trainloader, _ = load_data(partition_id, num_partitions)
+    trainloader, _ = get_data_loaders(context)
 
     # Call the training function
     train_loss = train_fn(
@@ -83,9 +92,7 @@ def evaluate(msg: Message, context: Context):
     model.to(device)
 
     # Load the data
-    partition_id = context.node_config["partition-id"]
-    num_partitions = context.node_config["num-partitions"]
-    _, valloader = load_data(partition_id, num_partitions)
+    _, valloader = get_data_loaders(context)
 
     # Call the evaluation function
     eval_loss, eval_acc = test_fn(
