@@ -16,8 +16,10 @@ def load_custom_data(
     partitioner_id = config["partitioner-id"]
     dataset_name = config["dataset-name"]
     batch_size = config["batch-size"]
+    partition_by = config["partition-by"]
     alpha = config["partition-alpha"]
     seed = config["partition-seed"]
+    num_shards_per_partition = config["num-shards-per-partition"]
 
     if fds is None:
         if partitioner_id == "iid":
@@ -25,15 +27,15 @@ def load_custom_data(
         elif partitioner_id == "dirichlet":
             partitioner = DirichletPartitioner(
                 num_partitions=num_partitions,
-                partition_by="fine_label",
+                partition_by=partition_by,
                 alpha=alpha,
                 seed=seed,
             )
         elif partitioner_id == "shard":
             partitioner = ShardPartitioner(
                 num_partitions=num_partitions, 
-                partition_by="fine_label",
-                num_shards_per_partition=2,
+                partition_by=partition_by,
+                num_shards_per_partition=num_shards_per_partition,
                 seed=seed
             )
         else:

@@ -108,6 +108,7 @@ def load_data(partition_id: int, num_partitions: int, config: UserConfig | None 
     config = {} if config is None else config
     dataset_name = config.get("dataset-name", "zalando-datasets/fashion_mnist")
     batch_size = config.get("batch-size", 32)
+    partition_by = config.get("partition-by", "label")
     partition_alpha = config.get("partition-alpha", 1.0)
     partition_seed = config.get("partition-seed", 42)
 
@@ -116,7 +117,7 @@ def load_data(partition_id: int, num_partitions: int, config: UserConfig | None 
     if fds is None:
         partitioner = DirichletPartitioner(
             num_partitions=num_partitions,
-            partition_by="label",
+            partition_by=partition_by,
             alpha=partition_alpha,
             seed=partition_seed,
         )

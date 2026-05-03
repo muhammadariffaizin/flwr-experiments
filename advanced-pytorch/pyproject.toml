@@ -36,5 +36,7 @@ load-data-fn = "pytorch_example.task:load_data"
 dataset-name = "zalando-datasets/fashion_mnist"
 batch-size = 32
 partitioner-id = "dirichlet"
+partition-by = "label"
 partition-alpha = 1.0
 partition-seed = 42
+num-shards-per-partition = 2
