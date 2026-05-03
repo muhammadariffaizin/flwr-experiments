@@ -13,14 +13,14 @@ def load_custom_data(
     config,
 ):
     global fds
-    partitioner_id = config["partitioner-id"]
-    dataset_name = config["dataset-name"]
-    batch_size = config["batch-size"]
-    feature_column = config["feature-column"]
-    partition_by = config["partition-by"]
-    alpha = config["partition-alpha"]
-    seed = config["partition-seed"]
-    num_shards_per_partition = config["num-shards-per-partition"]
+    partitioner_id = config.get("partitioner-id", "dirichlet")
+    dataset_name = config.get("dataset-name", "zalando-datasets/fashion_mnist")
+    batch_size = config.get("batch-size", 32)
+    feature_column = config.get("feature-column", "image")
+    partition_by = config.get("partition-by", "label")
+    alpha = config.get("partition-alpha", 1.0)
+    seed = config.get("partition-seed", 42)
+    num_shards_per_partition = config.get("num-shards-per-partition", 2)
 
     if fds is None:
         if partitioner_id == "iid":

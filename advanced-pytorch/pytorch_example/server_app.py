@@ -14,6 +14,10 @@ from pytorch_example.task import create_run_dir, get_apply_eval_transforms, test
 # Create ServerApp
 app = ServerApp()
 
+DEFAULT_MODEL_FN = "pytorch_example.model:create_model"
+DEFAULT_FEATURE_COLUMN = "image"
+DEFAULT_TARGET_COLUMN = "label"
+
 
 def import_configured_fn(path: str):
     """Import a configured callback formatted as 'module:function'."""
@@ -23,7 +27,7 @@ def import_configured_fn(path: str):
 
 def create_model(config):
     """Create the configured model."""
-    create_model_fn = import_configured_fn(config["model-fn"])
+    create_model_fn = import_configured_fn(config.get("model-fn", DEFAULT_MODEL_FN))
     return create_model_fn(config)
 
 
@@ -67,10 +71,10 @@ def main(grid: Grid, context: Context) -> None:
 
 def get_global_evaluate_fn(config, device: str):
     """Return an evaluation function for server-side evaluation."""
-    dataset_name = config["dataset-name"]
-    batch_size = config["batch-size"]
-    feature_column = config["feature-column"]
-    target_column = config["target-column"]
+    dataset_name = config.get("dataset-name", "zalando-datasets/fashion_mnist")
+    batch_size = config.get("batch-size", 32)
+    feature_column = config.get("feature-column", DEFAULT_FEATURE_COLUMN)
+    target_column = config.get("target-column", DEFAULT_TARGET_COLUMN)
 
     def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
         """Evaluate model on central data."""

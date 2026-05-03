@@ -13,6 +13,11 @@ from pytorch_example.task import train as train_fn
 app = ClientApp()
 classification_head_name = "classification-head"
 
+DEFAULT_MODEL_FN = "pytorch_example.model:create_model"
+DEFAULT_LOAD_DATA_FN = "pytorch_example.task:load_data"
+DEFAULT_FEATURE_COLUMN = "image"
+DEFAULT_TARGET_COLUMN = "label"
+
 
 def import_configured_fn(path: str):
     """Import a configured callback formatted as 'module:function'."""
@@ -22,7 +27,9 @@ def import_configured_fn(path: str):
 
 def create_model(context: Context):
     """Create the configured model."""
-    create_model_fn = import_configured_fn(context.run_config["model-fn"])
+    create_model_fn = import_configured_fn(
+        context.run_config.get("model-fn", DEFAULT_MODEL_FN)
+    )
     return create_model_fn(context.run_config)
 
 
@@ -49,7 +56,9 @@ def get_data_loaders(context: Context):
     """Load client data using the configured data-loader callback."""
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
-    load_data_fn = import_configured_fn(context.run_config["load-data-fn"])
+    load_data_fn = import_configured_fn(
+        context.run_config.get("load-data-fn", DEFAULT_LOAD_DATA_FN)
+    )
     return load_data_fn(partition_id, num_partitions, context.run_config)
 
 
@@ -58,7 +67,7 @@ def train(msg: Message, context: Context):
     """Train the model on local data."""
 
     # Load model and apply received weights
-    personalized_layer_name = context.run_config["personalized-layer-name"]
+    personalized_layer_name = context.run_config.get("personalized-layer-name", "fc2")
     model = create_model(context)
     model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     # Restore this client's previously saved classification layer weights
@@ -74,11 +83,11 @@ def train(msg: Message, context: Context):
     train_loss = train_fn(
         model,
         trainloader,
-        context.run_config["local-epochs"],
+        context.run_config.get("local-epochs", 1),
         msg.content["config"]["lr"],
         device,
-        context.run_config["feature-column"],
-        context.run_config["target-column"],
+        context.run_config.get("feature-column", DEFAULT_FEATURE_COLUMN),
+        context.run_config.get("target-column", DEFAULT_TARGET_COLUMN),
     )
 
     # Save classification head in `context.state` to use in future rounds
@@ -100,7 +109,7 @@ def evaluate(msg: Message, context: Context):
     """Evaluate the model on local data."""
 
     # Load model and apply received weights
-    personalized_layer_name = context.run_config["personalized-layer-name"]
+    personalized_layer_name = context.run_config.get("personalized-layer-name", "fc2")
     model = create_model(context)
     model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     # Restore this client's previously saved classification layer weights
@@ -117,8 +126,8 @@ def evaluate(msg: Message, context: Context):
         model,
         valloader,
         device,
-        context.run_config["feature-column"],
-        context.run_config["target-column"],
+        context.run_config.get("feature-column", DEFAULT_FEATURE_COLUMN),
+        context.run_config.get("target-column", DEFAULT_TARGET_COLUMN),
     )
 
     # Construct and return reply Message
