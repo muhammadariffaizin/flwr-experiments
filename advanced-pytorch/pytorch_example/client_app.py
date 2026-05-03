@@ -62,6 +62,8 @@ def train(msg: Message, context: Context):
         context.run_config["local-epochs"],
         msg.content["config"]["lr"],
         device,
+        context.run_config["feature-column"],
+        context.run_config["target-column"],
     )
 
     # Save classification head in `context.state` to use in future rounds
@@ -99,6 +101,8 @@ def evaluate(msg: Message, context: Context):
         model,
         valloader,
         device,
+        context.run_config["feature-column"],
+        context.run_config["target-column"],
     )
 
     # Construct and return reply Message

@@ -50,7 +50,15 @@ class Net(nn.Module):
         return self.fc2(x)
 
 
-def train(net, trainloader, epochs, lr, device):
+def train(
+    net,
+    trainloader,
+    epochs,
+    lr,
+    device,
+    feature_column: str = "image",
+    target_column: str = "label",
+):
     """Train the model on the training set."""
     net.to(device)  # move model to GPU if available
     criterion = torch.nn.CrossEntropyLoss().to(device)
@@ -59,10 +67,10 @@ def train(net, trainloader, epochs, lr, device):
     running_loss = 0.0
     for _ in range(epochs):
         for batch in trainloader:
-            images = batch["image"]
-            labels = batch["label"]
+            features = batch[feature_column]
+            targets = batch[target_column]
             optimizer.zero_grad()
-            loss = criterion(net(images.to(device)), labels.to(device))
+            loss = criterion(net(features.to(device)), targets.to(device))
             loss.backward()
             optimizer.step()
             running_loss += loss.item()
@@ -71,33 +79,61 @@ def train(net, trainloader, epochs, lr, device):
     return avg_trainloss
 
 
-def test(net, testloader, device):
+def test(
+    net,
+    testloader,
+    device,
+    feature_column: str = "image",
+    target_column: str = "label",
+):
     """Validate the model on the test set."""
     net.to(device)
     criterion = torch.nn.CrossEntropyLoss()
     correct, loss = 0, 0.0
     with torch.no_grad():
         for batch in testloader:
-            images = batch["image"].to(device)
-            labels = batch["label"].to(device)
-            outputs = net(images)
-            loss += criterion(outputs, labels).item()
-            correct += (torch.max(outputs.data, 1)[1] == labels).sum().item()
+            features = batch[feature_column].to(device)
+            targets = batch[target_column].to(device)
+            outputs = net(features)
+            loss += criterion(outputs, targets).item()
+            correct += (torch.max(outputs.data, 1)[1] == targets).sum().item()
     accuracy = correct / len(testloader.dataset)
     loss = loss / len(testloader)
     return loss, accuracy
 
 
+def get_apply_train_transforms(feature_column: str):
+    """Create train transforms for the configured feature column."""
+
+    def apply_transforms(batch):
+        batch[feature_column] = [
+            TRAIN_TRANSFORMS(feature) for feature in batch[feature_column]
+        ]
+        return batch
+
+    return apply_transforms
+
+
+def get_apply_eval_transforms(feature_column: str):
+    """Create eval transforms for the configured feature column."""
+
+    def apply_transforms(batch):
+        batch[feature_column] = [
+            EVAL_TRANSFORMS(feature) for feature in batch[feature_column]
+        ]
+        return batch
+
+    return apply_transforms
+
+
 def apply_train_transforms(batch):
-    """Apply transforms to the partition from FederatedDataset."""
-    batch["image"] = [TRAIN_TRANSFORMS(img) for img in batch["image"]]
-    return batch
+    """Apply train transforms using the default feature column."""
+    return get_apply_train_transforms("image")(batch)
 
 
 def apply_eval_transforms(batch):
-    """Apply transforms to the partition from FederatedDataset."""
-    batch["image"] = [EVAL_TRANSFORMS(img) for img in batch["image"]]
-    return batch
+    """Apply eval transforms using the default feature column."""
+    return get_apply_eval_transforms("image")(batch)
 
 
 fds = None  # Cache FederatedDataset
@@ -108,6 +144,7 @@ def load_data(partition_id: int, num_partitions: int, config: UserConfig | None 
     config = {} if config is None else config
     dataset_name = config.get("dataset-name", "zalando-datasets/fashion_mnist")
     batch_size = config.get("batch-size", 32)
+    feature_column = config.get("feature-column", "image")
     partition_by = config.get("partition-by", "label")
     partition_alpha = config.get("partition-alpha", 1.0)
     partition_seed = config.get("partition-seed", 42)
@@ -130,9 +167,11 @@ def load_data(partition_id: int, num_partitions: int, config: UserConfig | None 
     partition_train_test = partition.train_test_split(test_size=0.2, seed=partition_seed)
 
     train_partition = partition_train_test["train"].with_transform(
-        apply_train_transforms
+        get_apply_train_transforms(feature_column)
     )
-    test_partition = partition_train_test["test"].with_transform(apply_eval_transforms)
+    test_partition = partition_train_test["test"].with_transform(
+        get_apply_eval_transforms(feature_column)
+    )
     trainloader = DataLoader(train_partition, batch_size=batch_size, shuffle=True)
     testloader = DataLoader(test_partition, batch_size=batch_size)
     return trainloader, testloader

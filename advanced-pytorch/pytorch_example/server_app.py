@@ -7,7 +7,7 @@ from flwr.serverapp import Grid, ServerApp
 from torch.utils.data import DataLoader
 
 from pytorch_example.strategy import CustomFedAvg
-from pytorch_example.task import Net, apply_eval_transforms, create_run_dir, test
+from pytorch_example.task import Net, create_run_dir, get_apply_eval_transforms, test
 
 # Create ServerApp
 app = ServerApp()
@@ -42,7 +42,7 @@ def main(grid: Grid, context: Context) -> None:
         initial_arrays=arrays,
         train_config=ConfigRecord({"lr": initial_lr}),
         num_rounds=num_rounds,
-        evaluate_fn=get_global_evaluate_fn(device=device),
+        evaluate_fn=get_global_evaluate_fn(context.run_config, device=device),
     )
 
     # Save final model to disk
@@ -51,8 +51,12 @@ def main(grid: Grid, context: Context) -> None:
     torch.save(state_dict, "final_model.pt")
 
 
-def get_global_evaluate_fn(device: str):
+def get_global_evaluate_fn(config, device: str):
     """Return an evaluation function for server-side evaluation."""
+    dataset_name = config["dataset-name"]
+    batch_size = config["batch-size"]
+    feature_column = config["feature-column"]
+    target_column = config["target-column"]
 
     def global_evaluate(server_round: int, arrays: ArrayRecord) -> MetricRecord:
         """Evaluate model on central data."""
@@ -61,17 +65,23 @@ def get_global_evaluate_fn(device: str):
         # FlowerDatasets. However, we don't use FlowerDatasets for the server since
         # partitioning is not needed.
         # We make use of the "test" split only
-        global_test_set = load_dataset("zalando-datasets/fashion_mnist")["test"]
+        global_test_set = load_dataset(dataset_name)["test"]
 
         testloader = DataLoader(
-            global_test_set.with_transform(apply_eval_transforms),
-            batch_size=32,
+            global_test_set.with_transform(get_apply_eval_transforms(feature_column)),
+            batch_size=batch_size,
         )
 
         net = Net()
         net.load_state_dict(arrays.to_torch_state_dict())
         net.to(device)
-        loss, accuracy = test(net, testloader, device=device)
+        loss, accuracy = test(
+            net,
+            testloader,
+            device=device,
+            feature_column=feature_column,
+            target_column=target_column,
+        )
         return MetricRecord({"accuracy": accuracy, "loss": loss})
 
     return global_evaluate

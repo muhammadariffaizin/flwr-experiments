@@ -2,7 +2,7 @@ from torch.utils.data import DataLoader
 from flwr_datasets import FederatedDataset
 from flwr_datasets.partitioner import IidPartitioner, DirichletPartitioner, ShardPartitioner
 
-from pytorch_example.task import apply_eval_transforms, apply_train_transforms
+from pytorch_example.task import get_apply_eval_transforms, get_apply_train_transforms
 
 fds = None
 
@@ -16,6 +16,7 @@ def load_custom_data(
     partitioner_id = config["partitioner-id"]
     dataset_name = config["dataset-name"]
     batch_size = config["batch-size"]
+    feature_column = config["feature-column"]
     partition_by = config["partition-by"]
     alpha = config["partition-alpha"]
     seed = config["partition-seed"]
@@ -49,9 +50,11 @@ def load_custom_data(
     partition_train_test = partition.train_test_split(test_size=0.2, seed=seed)
 
     train_partition = partition_train_test["train"].with_transform(
-        apply_train_transforms
+        get_apply_train_transforms(feature_column)
     )
-    test_partition = partition_train_test["test"].with_transform(apply_eval_transforms)
+    test_partition = partition_train_test["test"].with_transform(
+        get_apply_eval_transforms(feature_column)
+    )
 
     trainloader = DataLoader(
         train_partition,
