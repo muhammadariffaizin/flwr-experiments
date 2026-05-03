@@ -31,3 +31,4 @@ fraction-train = 0.25
 fraction-evaluate = 0.5
 local-epochs = 1
 server-device = "cpu"
+initial-lr = 0.1

@@ -21,6 +21,7 @@ def main(grid: Grid, context: Context) -> None:
     fraction_train = context.run_config["fraction-train"]
     fraction_eval = context.run_config["fraction-evaluate"]
     device = context.run_config["server-device"]
+    initial_lr = context.run_config["initial-lr"]
 
     # Load global model
     global_model = Net()
@@ -39,7 +40,7 @@ def main(grid: Grid, context: Context) -> None:
     result = strategy.start(
         grid=grid,
         initial_arrays=arrays,
-        train_config=ConfigRecord({"lr": 0.1}),
+        train_config=ConfigRecord({"lr": initial_lr}),
         num_rounds=num_rounds,
         evaluate_fn=get_global_evaluate_fn(device=device),
     )
