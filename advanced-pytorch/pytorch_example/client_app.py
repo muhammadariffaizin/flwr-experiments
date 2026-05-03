@@ -6,7 +6,6 @@ import torch
 from flwr.app import ArrayRecord, Context, Message, MetricRecord, RecordDict
 from flwr.clientapp import ClientApp
 
-from pytorch_example.task import Net
 from pytorch_example.task import test as test_fn
 from pytorch_example.task import train as train_fn
 
@@ -15,27 +14,42 @@ app = ClientApp()
 classification_head_name = "classification-head"
 
 
-def save_layer_weights_to_state(state: RecordDict, net: Net):
+def import_configured_fn(path: str):
+    """Import a configured callback formatted as 'module:function'."""
+    module_name, function_name = path.split(":")
+    return getattr(import_module(module_name), function_name)
+
+
+def create_model(context: Context):
+    """Create the configured model."""
+    create_model_fn = import_configured_fn(context.run_config["model-fn"])
+    return create_model_fn(context.run_config)
+
+
+def save_layer_weights_to_state(state: RecordDict, net, layer_name: str):
     """Save last layer weights to state."""
-    state[classification_head_name] = ArrayRecord(net.fc2.state_dict())
+    if not layer_name:
+        return
+    layer = getattr(net, layer_name)
+    state[classification_head_name] = ArrayRecord(layer.state_dict())
 
 
-def load_layer_weights_from_state(state: RecordDict, net: Net):
+def load_layer_weights_from_state(state: RecordDict, net, layer_name: str):
     """Load last layer weights from state and applies them to the model."""
-    if classification_head_name not in state:
+    if not layer_name or classification_head_name not in state:
         return
 
     # Restore this client's saved classification head
     state_dict = state[classification_head_name].to_torch_state_dict()
-    net.fc2.load_state_dict(state_dict, strict=True)
+    layer = getattr(net, layer_name)
+    layer.load_state_dict(state_dict, strict=True)
 
 
 def get_data_loaders(context: Context):
     """Load client data using the configured data-loader callback."""
     partition_id = context.node_config["partition-id"]
     num_partitions = context.node_config["num-partitions"]
-    module_name, function_name = context.run_config["load-data-fn"].split(":")
-    load_data_fn = getattr(import_module(module_name), function_name)
+    load_data_fn = import_configured_fn(context.run_config["load-data-fn"])
     return load_data_fn(partition_id, num_partitions, context.run_config)
 
 
@@ -44,11 +58,12 @@ def train(msg: Message, context: Context):
     """Train the model on local data."""
 
     # Load model and apply received weights
-    model = Net()
+    personalized_layer_name = context.run_config["personalized-layer-name"]
+    model = create_model(context)
     model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     # Restore this client's previously saved classification layer weights
     # (no action if this is the first round it participates in)
-    load_layer_weights_from_state(context.state, model)
+    load_layer_weights_from_state(context.state, model, personalized_layer_name)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
@@ -67,7 +82,7 @@ def train(msg: Message, context: Context):
     )
 
     # Save classification head in `context.state` to use in future rounds
-    save_layer_weights_to_state(context.state, model)
+    save_layer_weights_to_state(context.state, model, personalized_layer_name)
 
     # Construct and return reply Message
     model_record = ArrayRecord(model.state_dict())
@@ -85,11 +100,12 @@ def evaluate(msg: Message, context: Context):
     """Evaluate the model on local data."""
 
     # Load model and apply received weights
-    model = Net()
+    personalized_layer_name = context.run_config["personalized-layer-name"]
+    model = create_model(context)
     model.load_state_dict(msg.content["arrays"].to_torch_state_dict())
     # Restore this client's previously saved classification layer weights
     # (no action if this is the first round it participates in)
-    load_layer_weights_from_state(context.state, model)
+    load_layer_weights_from_state(context.state, model, personalized_layer_name)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
 

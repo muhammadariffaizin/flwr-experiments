@@ -1,5 +1,7 @@
 """pytorch-example: A Flower / PyTorch app."""
 
+from importlib import import_module
+
 import torch
 from datasets import load_dataset
 from flwr.app import ArrayRecord, ConfigRecord, Context, MetricRecord
@@ -7,10 +9,22 @@ from flwr.serverapp import Grid, ServerApp
 from torch.utils.data import DataLoader
 
 from pytorch_example.strategy import CustomFedAvg
-from pytorch_example.task import Net, create_run_dir, get_apply_eval_transforms, test
+from pytorch_example.task import create_run_dir, get_apply_eval_transforms, test
 
 # Create ServerApp
 app = ServerApp()
+
+
+def import_configured_fn(path: str):
+    """Import a configured callback formatted as 'module:function'."""
+    module_name, function_name = path.split(":")
+    return getattr(import_module(module_name), function_name)
+
+
+def create_model(config):
+    """Create the configured model."""
+    create_model_fn = import_configured_fn(config["model-fn"])
+    return create_model_fn(config)
 
 
 @app.main()
@@ -24,7 +38,7 @@ def main(grid: Grid, context: Context) -> None:
     initial_lr = context.run_config["initial-lr"]
 
     # Load global model
-    global_model = Net()
+    global_model = create_model(context.run_config)
     arrays = ArrayRecord(global_model.state_dict())
 
     # Initialize FedAvg strategy
@@ -72,7 +86,7 @@ def get_global_evaluate_fn(config, device: str):
             batch_size=batch_size,
         )
 
-        net = Net()
+        net = create_model(config)
         net.load_state_dict(arrays.to_torch_state_dict())
         net.to(device)
         loss, accuracy = test(
